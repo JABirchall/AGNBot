@@ -7,26 +7,35 @@ $jailed = array();
 $badnames = array('fukyou', 'poontang', 'fucyou', 'fuck', 'cunt', 'fuku', 'bitch', 'b!tch', 'nigga', 'nigger', 'niga', 'shit', 'sh!t', 'penis', 'pen!s', 'fag', 'pussy', '[admin]', '[mod]','[moderator]', '[manager]', '[owner]', '[momerator]'); 
 $afkTime = 60*60; //60 minutes 
 $reported = array();
+$pattern = "/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ?!.;\\,\-_?'!*½=+$#£()<>{}\[\] % ]+/xi";
 
 // load framework files
 require_once("libraries/TeamSpeak3/TeamSpeak3.php");
 // connect to local server, authenticate and spawn an object for the virtual server on port 9987
 try{
-	$ts3_VirtualServer = TeamSpeak3::factory("serverquery://afkbot:[PASSWORD_PROTECTED]@127.0.0.1:10011/?server_port=9987&blocking=0&nickname=AGNBot");
+	$ts3_VirtualServer = TeamSpeak3::factory("serverquery://afkbot:[PASSWORD PROTECTED]@127.0.0.1:10011/?server_port=9987&blocking=0&nickname=AGNBot");
+	
 }catch(TeamSpeak3_Adapter_ServerQuery_Exception $e){
-	exit($e);
+	echo $e->getMessage;
 }
+$botChannel = $ts3_VirtualServer->channelGetByName("Bot House(Admins only)");
+$ts3_VirtualServer->clientMove($ts3_VirtualServer->whoamiGet("client_id"), $botChannel);
+$botChannel->message("BOT IS STARTING");
 
 $ts3_VirtualServer->notifyRegister("textserver");
 TeamSpeak3_Helper_Signal::getInstance()->subscribe("notifyTextmessage", "onTextMessage");
-$ts3_VirtualServer->message("[COLOR=blue][B]Aggressive Gaming Network teamspeak management bot started, version [COLOR=green]'1.0.16 Beta' [COLOR=blue]Server messages: [COLOR=green]ENABLED [COLOR=blue]Private messages: [COLOR=red]DISABLED!");
+//$clid = $ts3_VirtualServer->whoamiGet("client_id");
+//$ts3_VirtualServer->channelMessage("Starting Loop");
+
+//$ts3_VirtualServer->message("[COLOR=blue][B]Aggressive Gaming Network teamspeak management bot started, version [COLOR=green]'1.0.17 Alpha' [COLOR=blue]Server messages: [COLOR=green]ENABLED [COLOR=blue]Private messages: [COLOR=red]DISABLED!");
 
 while(1){
-	$start = microtime()+1000000;
+	$sleepstart = microtime(TRUE)+1;
+	$start = microtime(TRUE);
 	// walk through list of clients
-	$ts3_clients = $ts3_VirtualServer->clientList();
+	//$ts3_clients = $ts3_VirtualServer->clientList();
 
-	foreach($ts3_clients as $ts3_Client)
+	foreach($ts3_VirtualServer->clientList() as $ts3_Client)
 	{
 		if($ts3_Client["client_type"]) continue;
 		//var_dump($ts3_Client);
@@ -35,7 +44,9 @@ while(1){
 			$uid = (string)$ts3_Client['client_unique_identifier'];
 			$info = $ts3_Client->getInfo();
 			$clAFK = $info['client_idle_time']/1000;
-		}catch(Exception $e){}
+		}catch(Exception $e){
+			$botChannel->message($e->getMessage());
+		}
 
 		try{
 			if(stristr((string)$info['client_servergroups'], '13') || stristr((string)$info['client_servergroups'], '14') || stristr((string)$info['client_servergroups'], '32')){
@@ -47,11 +58,8 @@ while(1){
 						}
 					}else{
 						unset($reported[$uid]);
-						echo "Reported to {$nickname}".PHP_EOL;
 						$reported[$nickname]['a'.$complaint['timestamp']] = $uid;
 						$ts3_Client->message("[COLOR=blue][B]Hey {$nickname}, [U]{$complaint['fname']}[/U] has complained about [U]{$complaint['tname']}[/U] for \"{$complaint['message']}\" at ".date('Y-m-d H:i:s',$complaint['timestamp'])."[B][/COLOR]");
-			            echo "Reported to {$nickname}".PHP_EOL;
-
 					}
 				}
 			}
@@ -78,15 +86,15 @@ while(1){
 				if($clAFK >= 60*60){
 					$ts3_Client->move(216);
 					$ts3_Client->message("[COLOR=green][B]You have been moved to the ~AFK~ Channel for being AFK for 1 hour.[/B][/COLOR]");
-					echo "Moved {$nickname} for being afk for {$clAFK}".PHP_EOL;
+					$botChannel->message("Moved {$nickname} for being afk for {$clAFK}");
 				} else if($clAFK >= 60*15 && $info['client_input_hardware'] == 0){
 					$ts3_Client->move(216);
 					$ts3_Client->message("[COLOR=green][B]You have been moved to the ~AFK~ Channel for being on another teamspeak.[/B][/COLOR]");
-					echo "Moved {$nickname} for being on another teamspeak for 15 minutes".PHP_EOL;
+					$botChannel->message("Moved {$nickname} for being on another teamspeak for 15 minutes");
 				} else if($clAFK >= 60*15 && $info['client_output_muted'] == 1){
 					$ts3_Client->move(216);
 					$ts3_Client->message("[COLOR=green][B]You have been moved to the ~AFK~ Channel for being muted for 15 minutes.[/B][/COLOR]");
-					echo "Moved {$nickname} for being muted on teamspeak for 15 minutes".PHP_EOL;
+					$botChannel->message("Moved {$nickname} for being muted on teamspeak for 15 minutes");
 				}
 			}
 		}catch(Exception $e){}
@@ -100,61 +108,33 @@ while(1){
 					break;
 				}
 
-				switch (@$warned[$uid]['warnings']) {
-					default:
-						$ts3_Client->poke("[COLOR=red][B]Please read your private message from me![/B][/COLOR]");
-						$ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked (20 second warning)[/B][/COLOR]");
-						$warned[$uid]['warnings'] = 1;
-						break;
-					case 1:	break;
-					case 2:	break;
-					case 3:	break;
-					case 4: break;
-					case 5:	$ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (15 second warning)[/B][/COLOR]");
-						break;
-					case 6:	break;
-					case 7:	break;
-					case 8:	break;
-					case 9:	break;
-					case 10: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (10 second warning)[/B][/COLOR]");
-						break;
-					case 11: break;
-					case 12: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (8 second warning)[/B][/COLOR]");
-						break;
-					case 13: break;
-					case 14: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (6 second warning)[/B][/COLOR]");
-						break;
-					case 15: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (5 second warning)[/B][/COLOR]");
-						break;
-					case 16: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (4 second warning)[/B][/COLOR]");
-						break;
-					case 17: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (3 second warning)[/B][/COLOR]");
-						break;
-					case 18: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (2 second warning)[/B][/COLOR]");
-						break;
-					case 19: $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (1 second warning)[/B][/COLOR]");
-						break;
-	
-					case 20:
-						$ts3_Client->poke("[COLOR=red][B]Fine, I will just kick you![/B][/COLOR]");
-						$ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, You have been kicked from the Aggressive Gaming teamspeak3 server for using an offensive name.[/B][/COLOR]");
-						$warned[$uid]['warnings'] = 0;
-						$warned[$uid]['chances'] = 0;
-						$ts3_VirtualServer->clientKick($ts3_Client, TeamSpeak3::KICK_SERVER, "BOTKICK: {$nickname} is blacklisted nickname. (20 Second warning)");
-						break;
+				$warned[$uid]['warnings'] = isset($warned[$uid]['warnings']) ? $warned[$uid]['warnings']+1 : 0;
+				$num = &$warned[$uid]['warnings'];
+
+				if($num == 0) $ts3_Client->poke("[COLOR=red][B]Read your private message from me![/B][/COLOR]");
+				if($num > 10 || (($num % 5) == 0)) $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (" . (20 - $num) . " second warning)[/B][/COLOR]");
+
+
+				if($num == 20){
+					$ts3_Client->poke("[COLOR=red][B]Fine, I will just kick you![/B][/COLOR]");
+					$ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, You have been kicked from the Aggressive Gaming teamspeak 3 server for using an offensive name.[/B][/COLOR]");
+					$warned[$uid]['warnings'] = 0;
+					$warned[$uid]['chances'] = 0;
+					$ts3_VirtualServer->clientKick($ts3_Client, TeamSpeak3::KICK_SERVER, "BOTKICK: {$nickname} is blacklisted nickname. (20 Second warning)");
 				}
-			}catch(Exception $e){}
-			$warned[$uid]['warnings'] += 1;
-			echo "{$nickname} warned {$warned[$uid]['warnings']} times".PHP_EOL;
+			}catch(Exception $e){
+				$botChannel->message($e->getMessage());
+			}
+			$botChannel->message("{$nickname} warned {$warned[$uid]['warnings']} times for blacklisted nickname.");
 		}
 		if(@$warned[$uid]['warnings'] >= 1 && !strposa($nickname, $badnames)){
 			$warned[$uid]['warnings'] = 0;
-			echo "Changes username".PHP_EOL;
+			$botChannel->message("{$nickname} changed username.");
 			$warned[$uid]['chances'] = isset($warned[$uid]['chances']) ? $warned[$uid]['chances']+1 : 1;
 			$ts3_Client->message("[COLOR=green]Thank you for changing your name.[/COLOR]");
 		}
 
-		if(preg_match("/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ?!.;\\,\-?!*½=+$#£(){} % ]+/xi", $nickname)){
+		if(!preg_match($pattern, $nickname)){
 			try{
 				if(@$warnedi[$uid]['chances'] >= 2){
 					$ts3_Client->poke("[COLOR=red][B]I gave you 3 chances, Don't waste my time![/B][/COLOR]");
@@ -163,61 +143,39 @@ while(1){
 					break;
 				}
 	
-				switch (@$warnedi[$uid]['warnings']) {
-					default:
-						$ts3_Client->poke("[COLOR=red][B]Please read your private message from me![/B][/COLOR]");
-						$ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked (20 second warning)[/B][/COLOR]");
-						$warnedi[$uid]['warnings'] = 1;
-						break;
-					case 1:	break;
-					case 2:	break;
-					case 3:	break;
-					case 4: break;
-					case 5:	$ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (15 second warning)[/B][/COLOR]");
-						break;
-					case 6:	break;
-					case 7:	break;
-					case 8:	break;
-					case 9:	break;
-					case 10: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (10 second warning)[/B][/COLOR]");
-						break;
-					case 11: break;
-					case 12: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (8 second warning)[/B][/COLOR]");
-						break;
-					case 13: break;
-					case 14: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (6 second warning)[/B][/COLOR]");
-						break;
-					case 15: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (5 second warning)[/B][/COLOR]");
-						break;
-					case 16: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (4 second warning)[/B][/COLOR]");
-						break;
-					case 17: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (3 second warning)[/B][/COLOR]");
-						break;
-					case 18: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (2 second warning)[/B][/COLOR]");
-						break;
-					case 19: $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (1 second warning)[/B][/COLOR]");
-						break;
-		
-					case 20:
-						$ts3_Client->poke("[COLOR=red][B]Fine, I will just kick you![/B][/COLOR]");
-						$ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, You have been kicked from the Aggressive Gaming teamspeak3 server.[/B][/COLOR]");
-						$warnedi[$uid]['warnings'] = 0;
-						$warnedi[$uid]['chances'] = 0;
-						$ts3_VirtualServer->clientKick($ts3_Client, TeamSpeak3::KICK_SERVER, "BOTKICK: {$nickname} is using illegal characters (20 Second warning)");
-						break;
-				}
-				echo "{$nickname} matches regex".PHP_EOL;
-			}catch(Exception $e){}
+				$warnedi[$uid]['warnings'] = isset($warnedi[$uid]['warnings']) ? $warnedi[$uid]['warnings']+1 : 0;
+				$num = &$warnedi[$uid]['warnings'];
 
-			$warnedi[$uid]['warnings'] += 1;
-			echo "{$nickname} warned {$warnedi[$uid]['warnings']} times".PHP_EOL;
-	
+				if($num == 0) $ts3_Client->poke("[COLOR=red][B]Read your private message from me![/B][/COLOR]");
+				if($num > 10 || (($num % 5) == 0)) $ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, Change your name now or you will be kicked. (" . (20 - $num) . " second warning)[/B][/COLOR]");
+
+				if($num == 20){
+					$ts3_Client->poke("[COLOR=red][B]Fine, I will just kick you![/B][/COLOR]");
+					$ts3_Client->message("[COLOR=red][B]Your nickname is using illegal characters, You have been kicked from the Aggressive Gaming teamspeak 3 server.[/B][/COLOR]");
+					$warnedi[$uid]['warnings'] = 0;
+					$warnedi[$uid]['chances'] = 0;
+					$ts3_VirtualServer->clientKick($ts3_Client, TeamSpeak3::KICK_SERVER, "BOTKICK: {$nickname} is using illegal characters. (20 Second warning)");
+				}
+				$botChannel->message("{$nickname} warned {$warnedi[$uid]['warnings']} times for illegal characters");
+			}catch(Exception $e){
+				$botChannel->message($e->getMessage());
+			}
+		}
+		if(@$warnedi[$uid]['warnings'] >= 1 && preg_match($pattern, $nickname)){
+			$warnedi[$uid]['warnings'] = 0;
+			$botChannel->message("{$nickname} changed username.");
+			$warnedi[$uid]['chances'] = isset($warnedi[$uid]['chances']) ? $warnedi[$uid]['chances']+1 : 1;
+			$ts3_Client->message("[COLOR=green]Thank you for changing your name.[/COLOR]");
 		}
 	}
 
 	$ts3_VirtualServer->clientListReset();
-	usleep($start - microtime());
+	$sleep = ($sleepstart - microtime(TRUE)) * 1000000;
+	//$botChannel->message("[TICK] took ". (microtime(TRUE) - $start) ." to complete, sleep for ".($sleep/1000000));
+	if($sleepstart > microtime(TRUE)) usleep($sleep);
+	else $botChannel->message("LAGG!");
 }
+
 
 
 function strposa($haystack, $needle, $offset=0) {
@@ -232,9 +190,8 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 {
 	echo "[{$event["invokername"]}]: {$event["msg"]}".PHP_EOL;
 	$serv = $host->serverGetByPort(9987);
-	if(stristr(strtolower((string)$event["msg"]),'hello') && strtolower($event["invokername"]) != "agnbot"){
-		$serv->message("Howdy {$event["invokername"]}, isn't it a nice day today.");
-	}
+
+	if(stristr(strtolower((string)$event["msg"]),'hello') && strtolower($event["invokername"]) != "agnbot")	$serv->message("Howdy {$event["invokername"]}, isn't it a nice day today.");
 
 	if(stristr(strtolower((string)$event["msg"]),'!meetingmove') && strtolower($event["invokername"]) != "agnbot"){
 		foreach($serv->clientList() as $ts3_Client)
@@ -269,9 +226,7 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 		}
 	}
 
-	if(stristr(strtolower((string)$event["msg"]),'!time') && strtolower($event["invokername"]) != "agnbot"){
-		$serv->message("The current server time is ".date("F j, Y, g:i a"));
-	}
+	if(stristr(strtolower((string)$event["msg"]),'!time') && strtolower($event["invokername"]) != "agnbot") $serv->message("The current server time is ".date("F j, Y, g:i a"));
 
 	if(stristr(strtolower((string)$event["msg"]),'!info') && strtolower($event["invokername"]) != "agnbot"){
 		$name = strtolower(str_replace("!info", '',str_replace("!info ", '',(string)$event["msg"])));
@@ -293,7 +248,6 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 				}
 			}
 		}catch(Exception $e){}
-
 	}
 
 	if(stristr(strtolower((string)$event["msg"]),'!troll') || stristr(strtolower((string)$event["msg"]),'!jail') && strtolower($event["invokername"]) != "agnbot"){
@@ -325,9 +279,7 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 					break;
 				}
 			}
-			if(isset($matches) && $matches != ''){
-				$serv->message("Found matches for {$name}: {$matches} - Sent to jail.");
-			}
+			if(isset($matches) && $matches != '') $serv->message("Found matches for {$name}: {$matches} - Sent to jail.");
 		}catch(Exception $e){}
 	}
 
@@ -353,5 +305,4 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 			}
 		}catch(Exception $e){}
 	}
-
 }
