@@ -35,7 +35,7 @@ else $blacklisted = "[COLOR=green]your server is [B]Not Blacklisted[/B].[/COLOR]
 
 TeamSpeak3_Helper_Signal::getInstance()->subscribe("notifyTextmessage", "onTextMessage");
 
-$ts3_VirtualServer->message("[COLOR=blue][B]Aggressive Gaming Network teamspeak management bot started, version [COLOR=green]'". VERSION ."' [COLOR=blue]Server messages: [COLOR=green]ENABLED [COLOR=blue]Private messages: [COLOR=red]DISABLED! [COLOR=blue]your server is {$blacklisted}");
+$ts3_VirtualServer->message("[COLOR=blue][B]Aggressive Gaming Network teamspeak management bot started, version [COLOR=green]'". VERSION ."' [COLOR=blue]Server messages: [COLOR=green]ENABLED [COLOR=blue]Private messages: [COLOR=red]DISABLED! {$blacklisted}");
 
 // Check server packet loss every second.
 while(true){
@@ -60,7 +60,7 @@ while(true){
 	else if($totalPacketloss >= 18.9999)
 	{	
 		$ts3_VirtualServer->message("[COLOR=orange][B]The server is experiencing moderate lagg. (Average packet loss {$totalPacketloss}%[/COLOR]");
-		sleep(20);
+		sleep(30);
 		continue;
 	}
 	else if($totalPacketloss >= 9.9999)
