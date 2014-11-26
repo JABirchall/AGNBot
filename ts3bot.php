@@ -30,8 +30,8 @@ $ts3_VirtualServer->notifyRegister("textchannel");
 //$ts3_VirtualServer->notifyRegister("textprivate");
 
 // checdk for blacklisted servers
-if($ts3_BlacklistServer->isBlacklisted("192.99.147.50")) $ts3_VirtualServer->message("[COLOR=red]your server is [B]blacklisted[/B]... disconnect now![/COLOR]");
-else $ts3_VirtualServer->message("[COLOR=green]your server is [B]Not Blacklisted[/B].[/COLOR]");
+if($ts3_BlacklistServer->isBlacklisted("192.99.147.50")) $blacklisted = "[COLOR=red]your server is [B]blacklisted[/B]... disconnect now![/COLOR]";
+else $blacklisted = "[COLOR=green]your server is [B]Not Blacklisted[/B].[/COLOR]";
 
 TeamSpeak3_Helper_Signal::getInstance()->subscribe("notifyTextmessage", "onTextMessage");
 
