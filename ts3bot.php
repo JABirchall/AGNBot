@@ -1,44 +1,80 @@
 <?php
-
+error_reporting(E_ERROR | E_WARNING | E_PARSE);
 // Variables
+define(VERSION, "1.1.3 Beta");
 $warned = array();
 $warnedi = array();
 $jailed = array();
 $badnames = array('fukyou', 'poontang', 'fucyou', 'fuck', 'cunt', 'fuku', 'bitch', 'b!tch', 'nigga', 'nigger', 'niga', 'shit', 'sh!t', 'penis', 'pen!s', 'fag', 'pussy', '[admin]', '[mod]','[moderator]', '[manager]', '[owner]', '[momerator]'); 
 $afkTime = 60*60; //60 minutes 
+$muteTime = 15*60;
 $reported = array();
-$pattern = "/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ?!.;\\,\-_?'!*½=+$#£()<>{}\[\] % ]+/xi";
-
+$pattern = "/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ?!.;\\,\-_?'\/!*½=+$#£()<>{}\[\] % ]+/xi";
 // load framework files
 require_once("libraries/TeamSpeak3/TeamSpeak3.php");
 // connect to local server, authenticate and spawn an object for the virtual server on port 9987
 try{
-	$ts3_VirtualServer = TeamSpeak3::factory("serverquery://afkbot:[PASSWORD PROTECTED]@127.0.0.1:10011/?server_port=9987&blocking=0&nickname=AGNBot");
-	
+	$ts3_VirtualServer = TeamSpeak3::factory("serverquery://afkbot:-protected-@142.4.205.65:10011/?server_port=9987&blocking=0&nickname=AGNBot");
+	$ts3_BlacklistServer = TeamSpeak3::factory("blacklist");
 }catch(TeamSpeak3_Adapter_ServerQuery_Exception $e){
-	echo $e->getMessage;
+	echo $e->getMessage();
 }
+
 $botChannel = $ts3_VirtualServer->channelGetByName("Bot House(Admins only)");
 $ts3_VirtualServer->clientMove($ts3_VirtualServer->whoamiGet("client_id"), $botChannel);
+
 $botChannel->message("BOT IS STARTING");
 
 $ts3_VirtualServer->notifyRegister("textserver");
+$ts3_VirtualServer->notifyRegister("textchannel");
+//$ts3_VirtualServer->notifyRegister("textprivate");
+
+// checdk for blacklisted servers
+if($ts3_BlacklistServer->isBlacklisted("192.99.147.50")) $ts3_VirtualServer->message("[COLOR=red]your server is [B]blacklisted[/B]... disconnect now![/COLOR]");
+else $ts3_VirtualServer->message("[COLOR=green]your server is [B]Not Blacklisted[/B].[/COLOR]");
+
 TeamSpeak3_Helper_Signal::getInstance()->subscribe("notifyTextmessage", "onTextMessage");
-//$clid = $ts3_VirtualServer->whoamiGet("client_id");
-//$ts3_VirtualServer->channelMessage("Starting Loop");
 
-//$ts3_VirtualServer->message("[COLOR=blue][B]Aggressive Gaming Network teamspeak management bot started, version [COLOR=green]'1.0.17 Alpha' [COLOR=blue]Server messages: [COLOR=green]ENABLED [COLOR=blue]Private messages: [COLOR=red]DISABLED!");
+$ts3_VirtualServer->message("[COLOR=blue][B]Aggressive Gaming Network teamspeak management bot started, version [COLOR=green]'". VERSION ."' [COLOR=blue]Server messages: [COLOR=green]ENABLED [COLOR=blue]Private messages: [COLOR=red]DISABLED! [COLOR=blue]your server is {$blacklisted}");
 
-while(1){
+// Check server packet loss every second.
+while(true){
+	// 1 second ticks
 	$sleepstart = microtime(TRUE)+1;
 	$start = microtime(TRUE);
-	// walk through list of clients
-	//$ts3_clients = $ts3_VirtualServer->clientList();
 
+	$serverInfo = $ts3_VirtualServer->getInfo();
+	$totalPacketloss = (float)$serverInfo["virtualserver_total_packetloss_total"]->toString() *100;
+	
+	if($totalPacketloss >= 49.9999) {
+		$ts3_VirtualServer->message("[COLOR=red][B]The server is for being DDOS'D! (Average packet loss {$totalPacketloss}%[/COLOR]");
+		sleep(30);
+		continue;
+	}
+	else if($totalPacketloss >= 29.9999)
+	{	
+		$ts3_VirtualServer->message("[COLOR=red][B]The server is experiencing alot of lagg. (Average packet loss {$totalPacketloss}%[/COLOR]");
+		sleep(30);
+		continue;
+	}
+	else if($totalPacketloss >= 18.9999)
+	{	
+		$ts3_VirtualServer->message("[COLOR=orange][B]The server is experiencing moderate lagg. (Average packet loss {$totalPacketloss}%[/COLOR]");
+		sleep(20);
+		continue;
+	}
+	else if($totalPacketloss >= 9.9999)
+	{
+		$ts3_VirtualServer->message("[COLOR=orange][B]The server is experiencing minor lagg. (Average packet loss {$totalPacketloss}%)[/COLOR]");
+		sleep(30);
+		continue;
+	}
+	
+	// walk through list of clients
 	foreach($ts3_VirtualServer->clientList() as $ts3_Client)
 	{
-		if($ts3_Client["client_type"]) continue;
-		//var_dump($ts3_Client);
+		if($ts3_Client["client_type"]) continue; // If Client is a client carry on else skip to next client
+
 		try{
 			$nickname = (string)strtolower(str_replace(' ', '', $ts3_Client));
 			$uid = (string)$ts3_Client['client_unique_identifier'];
@@ -65,7 +101,7 @@ while(1){
 			}
 		}catch(Exception $e){}
 
-		if(stristr((string)$info['client_servergroups'], '44')){
+		if(stristr((string)$info['client_servergroups'], '44')){ // Check if the client is in the jailed group and handle with them accordingly
 			try{
 				$ts3_Client->move(213);
 				$ts3_Client->poke("[COLOR=red][B]You have been sent to jail![/B][/COLOR]");
@@ -73,25 +109,25 @@ while(1){
 				$jailed[$uid] = time()+600;
 			}catch(Exception $e){}
 
-			if($jailed[$uid] <= time()){
+			if($jailed[$uid] <= time()){ // check time client has been in jail and if they spent there time.
 				$ts3_VirtualServer->serverGroupClientDel(44,$ts3_Client["client_database_id"]);
 				$ts3_Client->kick(TeamSpeak3::KICK_CHANNEL);
 				$ts3_Client->poke("You have spent your jail time, you are now free to go.");
 			}
 		}
-		// AFK MOVER---------------------------------------------------
+		// AFK MOVER
 		try{
 			if($nickname == "musicbot" || $nickname == "clubbot"){
 			}else{
-				if($clAFK >= 60*60){
+				if($clAFK >= $afkTime){
 					$ts3_Client->move(216);
 					$ts3_Client->message("[COLOR=green][B]You have been moved to the ~AFK~ Channel for being AFK for 1 hour.[/B][/COLOR]");
 					$botChannel->message("Moved {$nickname} for being afk for {$clAFK}");
-				} else if($clAFK >= 60*15 && $info['client_input_hardware'] == 0){
+				} else if($clAFK >= $muteTime && $info['client_input_hardware'] == 0){
 					$ts3_Client->move(216);
 					$ts3_Client->message("[COLOR=green][B]You have been moved to the ~AFK~ Channel for being on another teamspeak.[/B][/COLOR]");
 					$botChannel->message("Moved {$nickname} for being on another teamspeak for 15 minutes");
-				} else if($clAFK >= 60*15 && $info['client_output_muted'] == 1){
+				} else if($clAFK >= $muteTime && $info['client_output_muted'] == 1){
 					$ts3_Client->move(216);
 					$ts3_Client->message("[COLOR=green][B]You have been moved to the ~AFK~ Channel for being muted for 15 minutes.[/B][/COLOR]");
 					$botChannel->message("Moved {$nickname} for being muted on teamspeak for 15 minutes");
@@ -99,7 +135,7 @@ while(1){
 			}
 		}catch(Exception $e){}
 
-		if(strposa($nickname, $badnames)){
+		if(strposa($nickname, $badnames)){ // Check if the clients username is in violation of the bad names array
 			try{
 				if(@$warned[$uid]['chances'] >= 2){
 					$ts3_Client->poke("[COLOR=red][B]I gave you 3 chances, Don't waste my time![/B][/COLOR]");
@@ -107,13 +143,11 @@ while(1){
 					$ts3_VirtualServer->clientKick($ts3_Client, TeamSpeak3::KICK_SERVER, "BOTKICK: {$nickname} is blacklisted nickname. (3 Chances)");
 					break;
 				}
-
-				$warned[$uid]['warnings'] = isset($warned[$uid]['warnings']) ? $warned[$uid]['warnings']+1 : 0;
+				
 				$num = &$warned[$uid]['warnings'];
 
 				if($num == 0) $ts3_Client->poke("[COLOR=red][B]Read your private message from me![/B][/COLOR]");
 				if($num > 10 || (($num % 5) == 0)) $ts3_Client->message("[COLOR=red][B]Your nickname is blacklisted, Change your name now or you will be kicked. (" . (20 - $num) . " second warning)[/B][/COLOR]");
-
 
 				if($num == 20){
 					$ts3_Client->poke("[COLOR=red][B]Fine, I will just kick you![/B][/COLOR]");
@@ -122,6 +156,7 @@ while(1){
 					$warned[$uid]['chances'] = 0;
 					$ts3_VirtualServer->clientKick($ts3_Client, TeamSpeak3::KICK_SERVER, "BOTKICK: {$nickname} is blacklisted nickname. (20 Second warning)");
 				}
+				$warned[$uid]['warnings'] = isset($warned[$uid]['warnings']) ? $warned[$uid]['warnings']+1 : 0;
 			}catch(Exception $e){
 				$botChannel->message($e->getMessage());
 			}
@@ -134,7 +169,7 @@ while(1){
 			$ts3_Client->message("[COLOR=green]Thank you for changing your name.[/COLOR]");
 		}
 
-		if(!preg_match($pattern, $nickname)){
+		if(preg_match($pattern, $nickname)){ // Check if the client username is in violation of the character rules
 			try{
 				if(@$warnedi[$uid]['chances'] >= 2){
 					$ts3_Client->poke("[COLOR=red][B]I gave you 3 chances, Don't waste my time![/B][/COLOR]");
@@ -161,7 +196,7 @@ while(1){
 				$botChannel->message($e->getMessage());
 			}
 		}
-		if(@$warnedi[$uid]['warnings'] >= 1 && preg_match($pattern, $nickname)){
+		if(@$warnedi[$uid]['warnings'] >= 1 && !preg_match($pattern, $nickname)){
 			$warnedi[$uid]['warnings'] = 0;
 			$botChannel->message("{$nickname} changed username.");
 			$warnedi[$uid]['chances'] = isset($warnedi[$uid]['chances']) ? $warnedi[$uid]['chances']+1 : 1;
@@ -169,10 +204,10 @@ while(1){
 		}
 	}
 
-	$ts3_VirtualServer->clientListReset();
-	$sleep = ($sleepstart - microtime(TRUE)) * 1000000;
+	$ts3_VirtualServer->clientListReset(); // Refresh the client list
+	$sleep = ($sleepstart - microtime(TRUE)) * 1000000; // Calculate the remainder of the seond
 	//$botChannel->message("[TICK] took ". (microtime(TRUE) - $start) ." to complete, sleep for ".($sleep/1000000));
-	if($sleepstart > microtime(TRUE)) usleep($sleep);
+	if($sleepstart > microtime(TRUE)) usleep($sleep); 
 	else $botChannel->message("LAGG!");
 }
 
@@ -186,18 +221,18 @@ function strposa($haystack, $needle, $offset=0) {
     return false;
 }
 
-function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_Node_Host $host)
+function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_Node_Host $host) // Callback event function
 {
 	echo "[{$event["invokername"]}]: {$event["msg"]}".PHP_EOL;
 	$serv = $host->serverGetByPort(9987);
 
-	if(stristr(strtolower((string)$event["msg"]),'hello') && strtolower($event["invokername"]) != "agnbot")	$serv->message("Howdy {$event["invokername"]}, isn't it a nice day today.");
+	if(stristr(strtolower((string)$event["msg"]),'hello') && strtolower($event["invokername"]) != "agnbot")	$serv->message("Howdy {$event["invokername"]}, isn't it a nice day today."); // Debug command to check if bot is still running?
 
-	if(stristr(strtolower((string)$event["msg"]),'!meetingmove') && strtolower($event["invokername"]) != "agnbot"){
+	if(stristr(strtolower((string)$event["msg"]),'!meetingmove') && strtolower($event["invokername"]) != "agnbot"){ // Move all clients to the meeting channel.
 		foreach($serv->clientList() as $ts3_Client)
 		{	
 			$nickname = (string)strtolower($ts3_Client);
-			if($nickname != "musicbot"){
+			if($nickname != "musicbot"){ // skip musicbot. (Should add client check.)
 				try{
 					$ts3_Client->move(30);
 				}catch(Exception $e){}
@@ -205,7 +240,7 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 		}
 	}
 
-	if(stristr(strtolower((string)$event["msg"]),'!meetingtime') && strtolower($event["invokername"]) != "agnbot"){
+	if(stristr(strtolower((string)$event["msg"]),'!meetingtime') && strtolower($event["invokername"]) != "agnbot"){ // Tell all the users of a decided meeting time.
 		$time = file_get_contents('meeting.txt');
 		foreach($serv->clientList() as $ts3_Client)
 		{
@@ -214,21 +249,53 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 			}catch(Exception $e){}
 		}
 	}
-
-	if(stristr(strtolower((string)$event["msg"]),'!donate') && strtolower($event["invokername"]) != "agnbot"){
-		$donate = file_get_contents('donate.txt');
+	
+	if(stristr(strtolower((string)$event["msg"]),'!website') && strtolower($event["invokername"]) != "agnbot"){ // Tell all users of the website.
+		$website = file_get_contents('website.txt');
+		foreach($serv->clientList() as $ts3_Client)
+		{
+			try{
+				$ts3_Client->message("[COLOR=blue][B]{$event["invokername"]} wanted to remind you to register on our website to receive member rank and full access to our servers and teamspeak![/B][/COLOR]");
+				$ts3_Client->message("Website: [URL]http://aggressivegaming.org/[/URL]");
+			}catch(Exception $e){}
+		}
+	}
+	
+	if(stristr(strtolower((string)$event["msg"]),'!pz') && strtolower($event["invokername"]) != "agnbot"){ // ??? Some ugly shit
+		$pz = file_get_contents('pz.txt');
 		foreach($serv->clientList() as $ts3_Client)
 		{
 			$nickname = (string)strtolower($ts3_Client);
 			try{
-				$ts3_Client->message("[COLOR=blue][B]Hi {$nickname}, {$donate}[/B][/COLOR]");
+				$ts3_Client->message("[COLOR=blue][B][B] Just a heads up {$pz} [/B][/COLOR]");
+			}catch(Exception $e){}
+		}
+	}
+	
+	if(stristr(strtolower((string)$event["msg"]),'!dayz') && strtolower($event["invokername"]) != "agnbot"){ // ??? Some ugly shit
+		$dayz = file_get_contents('dayz.txt');
+		foreach($serv->clientList() as $ts3_Client)
+		{
+			$nickname = (string)strtolower($ts3_Client);
+			try{
+				$ts3_Client->message("[COLOR=blue][B] For you Dayz Mod players,  {$dayz} [/B][/COLOR]");
+			}catch(Exception $e){}
+		}
+	}
+	
+	if(stristr(strtolower((string)$event["msg"]),'!minecraft') && strtolower($event["invokername"]) != "agnbot"){ // ??? Some ugly shit
+		$minecraft = file_get_contents('minecraft.txt');
+		foreach($serv->clientList() as $ts3_Client)
+		{
+			try{
+				$ts3_Client->message("[COLOR=blue][B]{$event["invokername"]} wanted to remind you to: {$nickname}, {$minecraft}[/B][/COLOR]");
 			}catch(Exception $e){}
 		}
 	}
 
-	if(stristr(strtolower((string)$event["msg"]),'!time') && strtolower($event["invokername"]) != "agnbot") $serv->message("The current server time is ".date("F j, Y, g:i a"));
+	if(stristr(strtolower((string)$event["msg"]),'!time') && strtolower($event["invokername"]) != "agnbot") $serv->message("The current server time is ".date("F j, Y, g:i a")); // manualy time check if the bot is lagging.
 
-	if(stristr(strtolower((string)$event["msg"]),'!info') && strtolower($event["invokername"]) != "agnbot"){
+	if(stristr(strtolower((string)$event["msg"]),'!info') && strtolower($event["invokername"]) != "agnbot"){ // Get info on a user
 		$name = strtolower(str_replace("!info", '',str_replace("!info ", '',(string)$event["msg"])));
 		try{
 			$info = $serv->clientInfoDb($serv->clientFindDb($name));
@@ -250,7 +317,7 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 		}catch(Exception $e){}
 	}
 
-	if(stristr(strtolower((string)$event["msg"]),'!troll') || stristr(strtolower((string)$event["msg"]),'!jail') && strtolower($event["invokername"]) != "agnbot"){
+	if(stristr(strtolower((string)$event["msg"]),'!troll') || stristr(strtolower((string)$event["msg"]),'!jail') && strtolower($event["invokername"]) != "agnbot"){ // Add a user to the jail group (this will trigger the jail user later in the second.)
 		$matches = '';
 		$name = strtolower(str_replace("!troll ", '', str_replace("!jail ", '', (string)$event["msg"])));
 		try{
@@ -270,7 +337,7 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 			{
 				$nickname = (string)strtolower($ts3_Client);
 				if($nickname == 'moddedtibby' && $matches != ''){
-					$ts3_Client->message("[COLOR=blue][B]{$event["invokername"]} has sent users matching {$name} to jail, users: {$matches} at ".date("F j, Y, g:i a",time())."[/B][/COLOR]");
+					$ts3_Client->message("[COLOR=blue][B]{$event["invokername"]} has sent users matching {$name} to jail, users: {$matches} at ".date("F j, Y, g:i a",time())."[/B][/COLOR]"); // Tell moddedtibby someone has been jailed.
 					echo "{$event["invokername"]} has sent {$matches} to jail at ".date("F j, Y, g:i a",time()).PHP_EOL;
 					break;
 				} else if($nickname == 'moddedtibby'){
@@ -283,7 +350,7 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 		}catch(Exception $e){}
 	}
 
-	if(stristr(strtolower((string)$event["msg"]),'!unjail') && strtolower($event["invokername"]) != "agnbot"){
+	if(stristr(strtolower((string)$event["msg"]),'!unjail') && strtolower($event["invokername"]) != "agnbot"){ // Unjail a user manualy, if a issue if resolved or a mistaken jail.
 		$matches = '';
 		$name = strtolower(str_replace("!unjail ", '', (string)$event["msg"]));
 		try{
@@ -304,5 +371,25 @@ function onTextMessage(TeamSpeak3_Adapter_ServerQuery_Event $event, TeamSpeak3_N
 				}
 			}
 		}catch(Exception $e){}
+	}
+	
+	if(stristr(strtolower((string)$event["msg"]),'!kill') && strtolower($event["invokername"]) != "agnbot"){ // WHACK A MOLE
+		$matches = '';
+		$name = strtolower(str_replace("!kill ", '', (string)$event["msg"]));
+		try{
+			foreach($serv->clientList() as $ts3_Client)
+			{
+				$nickname = (string)strtolower($ts3_Client);
+
+				if($nickname == $name){
+					for($i=0; $i<=1000; $i++){
+						$ts3_Client->message("[COLOR=red][B]a[/B][/color]");
+						$ts3_Client->message("[COLOR=red][B]".bin2hex(mcrypt_create_iv(480))."[/B][/color]");
+					}
+				}
+			}
+		}catch(Exception $e){
+			echo $e->getMessage();
+		}
 	}
 }
